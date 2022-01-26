@@ -1,4 +1,4 @@
-import json, os, logging, requests
+import os, logging
 from time import sleep
 from typing import Dict
 from telegram import ReplyKeyboardMarkup, Update, ChatAction, Bot
@@ -11,7 +11,8 @@ from telegram.ext import (
     PicklePersistence,
     CallbackContext,
 )
-import actions.actions, syl, credentials
+from actions import actions
+import syl, credentials
 from util.getChatId import get_chat_id
 from util.errorhandler import error_handler
 
@@ -26,7 +27,7 @@ TOKEN = credentials.bot_token
 global bot
 bot = Bot(token=TOKEN)
 
-NAME, CONFIRMED_NAME, GREETED, TESTLOOP, END = range(5)
+RESTART, END, CONTINUE, NAME, CONFIRMED_NAME, GREETED, TESTLOOP= range(7)
 
 # *=================================== STARTING ===================================*
 
@@ -43,6 +44,10 @@ def start(update: Update, context: CallbackContext) -> str:
     # chat_id = get_chat_id(update, context)
 
     update.message.reply_text('Hi, nice to meet you!')
+    if username == 'wei_soooon':
+        update.message.reply_text('Send something')
+        context.user_data['first_prompt'] = True
+        return GREETED
     # reply with chat action "Typing..."
     update.message.reply_chat_action(ChatAction.TYPING, timeout=0.5)
     sleep(0.5)
@@ -67,6 +72,13 @@ def confirm_name(update: Update, context: CallbackContext) -> str:
     )
 
     return CONFIRMED_NAME
+
+def wrong_name(update: Update, context: CallbackContext) -> str:
+    update.message.reply_chat_action(ChatAction.TYPING, timeout=0.5)
+    sleep(0.5)
+    update.message.reply_text("What's your name?")
+
+    return NAME
 
 def greet(update: Update, context: CallbackContext) -> str:
     name = context.user_data['name']
@@ -101,11 +113,19 @@ def greet(update: Update, context: CallbackContext) -> str:
 
     return GREETED
 
-def bye(update: Update, _: CallbackContext) -> int:
+def restart(update: Update, _: CallbackContext) -> str:
     update.message.reply_chat_action(ChatAction.TYPING, timeout=0.5)
     sleep(0.5)
-    update.message.reply_text('Oh, you\'re leaving already?')
+    update.message.reply_text(
+        'Well then, gimme another high five!',
+        reply_markup=ReplyKeyboardMarkup(
+            [['High Five!']], one_time_keyboard=True,
+        )
+    )
 
+    return GREETED
+
+def bye(update: Update, _: CallbackContext) -> int:
     update.message.reply_chat_action(ChatAction.TYPING, timeout=1)
     sleep(1)
     update.message.reply_text('Well then, it was nice talking to you.')
@@ -153,13 +173,18 @@ def main() -> None:
             NAME: [MessageHandler(Filters.text, confirm_name)],
             CONFIRMED_NAME: [
                 MessageHandler(Filters.regex('^Yes$'), greet),
-                MessageHandler(Filters.regex('^No$'), confirm_name),
+                MessageHandler(Filters.regex('^No$'), wrong_name),
             ],
-            # TODO test
             GREETED: [actions.conversation],
             TESTLOOP: [MessageHandler(Filters.text, test_loop)],
-            END: [bye],
-            actions.RESTART: [start],
+            END: [
+                MessageHandler(Filters.regex('^Yes$'), bye),
+                MessageHandler(Filters.regex('^No$'), restart)
+            ], #!
+            RESTART: [
+                MessageHandler(Filters.regex('^Yes$'), start),
+                MessageHandler(Filters.regex('^No$'), restart)
+            ], #!
             # LOCATION: [
             #     MessageHandler(Filters.location, location),
             #     CommandHandler('skip', skip_location),
