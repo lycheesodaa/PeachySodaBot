@@ -15,9 +15,7 @@ from actions import actions
 from util.errorhandler import error_handler
 from pymongo import MongoClient
 
-global TOKEN
 TOKEN = os.environ['bot_token']
-global bot
 bot = Bot(token=TOKEN)
 MONGO = os.environ['mongo']
 
