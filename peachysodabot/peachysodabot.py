@@ -1,4 +1,4 @@
-import os, logging
+import os, logging, syl, certifi
 from time import sleep
 from typing import Dict
 from telegram import ReplyKeyboardMarkup, Update, ChatAction, Bot
@@ -12,9 +12,18 @@ from telegram.ext import (
     CallbackContext,
 )
 from actions import actions
-import syl, credentials
-from util.getChatId import get_chat_id
 from util.errorhandler import error_handler
+from pymongo import MongoClient
+
+global TOKEN
+TOKEN = os.environ['bot_token']
+global bot
+bot = Bot(token=TOKEN)
+MONGO = os.environ['mongo']
+
+# initializing mongo client
+client = MongoClient(MONGO, tlsCAFile=certifi.where())
+db = client.peachysoda
 
 # Enable logging
 logging.basicConfig(
@@ -22,32 +31,40 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-global TOKEN
-TOKEN = credentials.bot_token
-global bot
-bot = Bot(token=TOKEN)
 
-RESTART, END, CONTINUE, NAME, CONFIRMED_NAME, GREETED, TESTLOOP= range(7)
+RESTART, END, CONTINUE, NAME, CONFIRMED_NAME, GREETED, TESTLOOP, SYL = range(8)
 
 # *=================================== STARTING ===================================*
 
 def start(update: Update, context: CallbackContext) -> str:
-    # storing the username, find a use later
-    username = update.message.from_user.username
-    logger.info("Username: %s", username)
-    context.user_data['username'] = username
+    user = db.user
 
-    user_id = update.message.from_user.id
-    logger.info("User ID: %s", user_id)
-    context.user_data['user_id'] = user_id
+    skip2 = user.find_one({"username": 'sylviyay'})
+    # skip2 = user.find_one({"username": 'wei_soooon'})
+    skip = user.find_one({"username": update.effective_chat.username})
+    # print(type(skip))
 
-    # chat_id = get_chat_id(update, context)
+    if skip2 is not None:
+        context.user_data['first_prompt'] = True
+        update.message.reply_text(
+            f"Welcome, {skip2['name']}.",
+            reply_markup=ReplyKeyboardMarkup(
+                [["Glad to be back :)", "Hehe"]], one_time_keyboard=True
+            )
+        )
+        return SYL
+    elif skip is not None:
+        context.user_data['first_prompt'] = True
+        update.message.reply_text(
+            f"Welcome, {skip['name']}.",
+            reply_markup=ReplyKeyboardMarkup(
+                [["Hello!"]], one_time_keyboard=True
+            )
+        )
+        return GREETED
 
     update.message.reply_text('Hi, nice to meet you!')
-    if username == 'wei_soooon':
-        update.message.reply_text('Send something')
-        context.user_data['first_prompt'] = True
-        return GREETED
+
     # reply with chat action "Typing..."
     update.message.reply_chat_action(ChatAction.TYPING, timeout=0.5)
     sleep(0.5)
@@ -59,7 +76,6 @@ def confirm_name(update: Update, context: CallbackContext) -> str:
     name = update.message.text
     context.user_data['name'] = name
 
-    # context.bot.send_chat_action(action=ChatAction.TYPING, timeout=0.5)
     options = [['Yes', 'No']]
 
     update.message.reply_chat_action(ChatAction.TYPING, timeout=0.5)
@@ -82,14 +98,21 @@ def wrong_name(update: Update, context: CallbackContext) -> str:
 
 def greet(update: Update, context: CallbackContext) -> str:
     name = context.user_data['name']
-    username = context.user_data['username']
+    username = update.effective_chat.username
+    result = db.user.insert_one(
+        {'name': name,
+        'username': username,
+        'user_id': update.effective_user.id,
+        'chat_id': update.effective_chat.id}
+    )
+    # print(result)
 
     greeting = ""
 
-    if name == "Sylvia" and username == "sylviyay":
+    if username == "sylviyay":
     # if name == "weisoon" and username == "wei_soooon":
         greeting += (
-            'Hello Sylvia! I\'ve heard a lot about you from Wei Soon.'
+            f'Hello {name}! I\'ve heard a lot about you from Wei Soon.'
         )
     else:
         greeting += (
@@ -110,6 +133,9 @@ def greet(update: Update, context: CallbackContext) -> str:
     )
 
     context.user_data['first_prompt'] = True
+
+    if username == "sylviyay":
+        return SYL
 
     return GREETED
 
@@ -175,21 +201,17 @@ def main() -> None:
                 MessageHandler(Filters.regex('^Yes$'), greet),
                 MessageHandler(Filters.regex('^No$'), wrong_name),
             ],
+            SYL: [syl.conversation],
             GREETED: [actions.conversation],
             TESTLOOP: [MessageHandler(Filters.text, test_loop)],
             END: [
                 MessageHandler(Filters.regex('^Yes$'), bye),
                 MessageHandler(Filters.regex('^No$'), restart)
-            ], #!
+            ],
             RESTART: [
                 MessageHandler(Filters.regex('^Yes$'), start),
                 MessageHandler(Filters.regex('^No$'), restart)
-            ], #!
-            # LOCATION: [
-            #     MessageHandler(Filters.location, location),
-            #     CommandHandler('skip', skip_location),
-            # ],
-            # BIO: [MessageHandler(Filters.text & ~Filters.command, bio)],
+            ],
         },
         fallbacks=[
             CommandHandler('bye', bye),
@@ -205,18 +227,15 @@ def main() -> None:
     dispatcher.add_handler(show_data_handler)
     dispatcher.add_error_handler(error_handler)
 
-    # Start the Bot
-    # updater.start_polling()
-
     # read MODE env variable, fall back to 'polling' when undefined
     mode = os.environ.get("MODE", "polling")
 
     if mode == 'webhook':
         # enable webhook
         updater.start_webhook(listen="0.0.0.0",
-                            port=3978,
+                            port=os.environ['PORT'],
                             url_path=TOKEN)
-        updater.bot.setWebhook(f'https://example.com/svc/{TOKEN}')
+        updater.bot.setWebhook(os.environ['URL'] + TOKEN)
     else:
         # enable polling
         updater.start_polling()

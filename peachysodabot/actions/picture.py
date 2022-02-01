@@ -1,6 +1,6 @@
 import requests, json
 from time import sleep
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto, ReplyKeyboardMarkup, Update, ChatAction
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, Update, ChatAction
 from telegram.ext import (
     ConversationHandler,
     CallbackContext,
@@ -9,9 +9,8 @@ from telegram.ext import (
     Filters,
     CommandHandler
 )
-from util.getChatId import get_chat_id
 
-RESTART, END, CONTINUE, CHAT, CHOOSING_PIC, CUSTOM, RETRY = range(7)
+RESTART, END, CONTINUE, CHAT, CHOOSING_PIC, CUSTOM, RETRY, PICTURE = range(8)
 
 url = "https://meme-api.herokuapp.com/gimme/"
 
@@ -24,7 +23,7 @@ def picture(update: Update, context: CallbackContext) -> str:
         [InlineKeyboardButton(text='Custom', callback_data='custom')]
     ]
 
-    context.bot.send_chat_action(chat_id=get_chat_id(update, context), action=ChatAction.TYPING, timeout=0.5)
+    context.bot.send_chat_action(update.effective_chat.id, action=ChatAction.TYPING, timeout=0.5)
     sleep(0.5)
     update.callback_query.answer()
     update.callback_query.edit_message_text(
@@ -35,7 +34,7 @@ def picture(update: Update, context: CallbackContext) -> str:
     return CHOOSING_PIC
 
 def custom(update: Update, context: CallbackContext) -> str:
-    context.bot.send_chat_action(chat_id=get_chat_id(update, context), action=ChatAction.TYPING, timeout=0.5)
+    context.bot.send_chat_action(update.effective_chat.id, action=ChatAction.TYPING, timeout=0.5)
     sleep(0.5)
     update.callback_query.answer()
     update.callback_query.edit_message_text(
@@ -47,17 +46,17 @@ def subreddit(update: Update, context: CallbackContext) -> str:
     new_url = url
     is_callback = True
     if update.callback_query is not None:
-        new_url += update.callback_query.message.text
+        new_url += update.callback_query.data
     elif update.message is not None:
         new_url += update.message.text
         is_callback = False
 
     result = requests.get(new_url).text
-    print(result) #!
+    # print(result)
     data = json.loads(result)
 
     if "code" in data:
-        context.bot.send_chat_action(chat_id=get_chat_id(update, context), action=ChatAction.TYPING, timeout=0.5)
+        context.bot.send_chat_action(update.effective_chat.id, action=ChatAction.TYPING, timeout=0.5)
         sleep(0.5)
         if is_callback:
             update.callback_query.answer()
@@ -85,7 +84,7 @@ def subreddit(update: Update, context: CallbackContext) -> str:
         return RETRY
 
     elif data['nsfw'] == True or data['spoiler'] == True:
-        context.bot.send_chat_action(chat_id=get_chat_id(update, context), action=ChatAction.TYPING, timeout=0.5)
+        context.bot.send_chat_action(update.effective_chat.id, action=ChatAction.TYPING, timeout=0.5)
         sleep(0.5)
         if is_callback:
             update.callback_query.answer()
@@ -112,32 +111,35 @@ def subreddit(update: Update, context: CallbackContext) -> str:
             )
         return RETRY
     
-    context.bot.send_chat_action(chat_id=get_chat_id(update, context), action=ChatAction.TYPING, timeout=0.5)
+    context.bot.send_chat_action(update.effective_chat.id, action=ChatAction.TYPING, timeout=0.5)
     sleep(0.5)
     if is_callback:
         update.callback_query.answer()
-        update.callback_query.edit_message_text(
-            f"\"{data['title']}\""
+        update.callback_query.edit_message_text("You got it!")
+
+        context.bot.sendPhoto(
+            update.effective_chat.id,
+            data['url'],
+            caption=f"\"{data['title']}\"\n"
             f"By user {data['author']}, on r/{data['subreddit']}:",
         )
-        update.callback_query.edit_message_media(media=InputMediaPhoto(data['preview'][0]))
     else:
-        update.message.reply_text(
-            f"\"{data['title']}\"\n"
-            f"By user {data['author']}, on r/{data['subreddit']}:",
+        update.message.reply_photo(
+            data['url'],
+            caption=f"\"{data['title']}\"\n"
+            f"By user {data['author']}, on r/{data['subreddit']}:"
         )
-        update.message.edit_media(media=InputMediaPhoto(data['preview'][0]))
 
     sleep(1)
 
-    context.bot.send_chat_action(get_chat_id(update, context), action=ChatAction.TYPING, timeout=0.5)
+    context.bot.send_chat_action(update.effective_chat.id, action=ChatAction.TYPING, timeout=0.5)
     sleep(0.5)
     context.bot.send_message(
-        get_chat_id(update, context),
+        update.effective_chat.id,
         "How'd you find it?"
     )
 
-    return CONTINUE
+    return PICTURE
 
 def restart(update: Update, context: CallbackContext) -> str:
     update.message.reply_text(
@@ -158,17 +160,11 @@ def end(update: Update, context: CallbackContext) -> int:
     return END
 
 def _continue(update: Update, context: CallbackContext) -> str:
-    context.bot.send_chat_action(chat_id=get_chat_id(update, context), action=ChatAction.TYPING, timeout=0.5)
-    sleep(0.5)
-    update.callback_query.answer()
-    update.callback_query.edit_message_text(
-        "Ack, okay."
-    )
-
-    context.bot.send_chat_action(chat_id=get_chat_id(update, context), action=ChatAction.TYPING, timeout=0.5)
+    context.bot.send_chat_action(update.effective_chat.id, action=ChatAction.TYPING, timeout=0.5)
     sleep(0.5)
     context.bot.send_message(
-        "Still up for more?",
+        update.effective_chat.id,
+        "Well, are you still up for more?",
         reply_markup=ReplyKeyboardMarkup(
             [['Yes', 'No']], one_time_keyboard=True
         )
@@ -188,6 +184,9 @@ picture_conv = ConversationHandler(
         RETRY: [
             CallbackQueryHandler(picture, pattern=('^sure$')),
             CallbackQueryHandler(_continue, pattern=('^nah$')),
+        ],
+        PICTURE: [
+            MessageHandler(Filters.text, _continue),
         ]
     },
     fallbacks={
