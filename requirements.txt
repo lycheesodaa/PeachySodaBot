@@ -3,3 +3,4 @@ python-telegram-bot
 certifi
 requests
 google-api-python-client
+dnspython
