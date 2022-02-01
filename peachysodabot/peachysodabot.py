@@ -232,8 +232,8 @@ def main() -> None:
         # enable webhook
         updater.start_webhook(listen="0.0.0.0",
                             port=int(os.environ['PORT']),
-                            url_path=TOKEN)
-        updater.bot.setWebhook(os.environ['URL'] + TOKEN)
+                            url_path=TOKEN,
+                            webhook_url=os.environ['URL'] + TOKEN)
     else:
         # enable polling
         updater.start_polling()
