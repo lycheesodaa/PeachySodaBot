@@ -8,7 +8,6 @@ from telegram.ext import (
     MessageHandler,
     Filters,
     ConversationHandler,
-    PicklePersistence,
     CallbackContext,
 )
 from actions import actions
@@ -187,8 +186,7 @@ def show_data(update: Update, context: CallbackContext) -> None:
 
 def main() -> None:
     # """Run the bot."""
-    persistence = PicklePersistence(filename='peachysodabot')
-    updater = Updater(TOKEN, persistence=persistence)
+    updater = Updater(TOKEN)
 
     dispatcher = updater.dispatcher
 
