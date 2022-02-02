@@ -228,13 +228,14 @@ def main() -> None:
 
     # read MODE env variable, fall back to 'polling' when undefined
     mode = os.environ.get("MODE", "polling")
+    URL = os.environ.get("URL")
 
     if mode == 'webhook':
         # enable webhook
         updater.start_webhook(listen="0.0.0.0",
                             port=PORT,
                             url_path=TOKEN,
-                            webhook_url=os.environ['URL'] + TOKEN)
+                            webhook_url=URL + TOKEN)
     else:
         # enable polling
         updater.start_polling()
