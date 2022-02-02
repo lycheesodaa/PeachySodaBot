@@ -49,11 +49,13 @@ def message(update: Update, context: CallbackContext) -> str:
         "Here, Wei Soon has a message for you:"
     )
 
+    message = os.environ.get('my_message', 'error')
+
     context.bot.send_chat_action(update.effective_chat.id, ChatAction.TYPING, timeout=0.5)
     sleep(0.5)
     context.bot.send_message(
-        update.effective_chat.id,
-        os.environ.get('my_message', 'error'),
+        chat_id=update.effective_chat.id,
+        text=message,
         parse_mode=ParseMode.HTML
     )
     context.bot.send_message(update.effective_chat.id, emojis.heart)

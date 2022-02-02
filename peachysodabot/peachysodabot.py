@@ -18,6 +18,7 @@ from pymongo import MongoClient
 TOKEN = os.environ['bot_token']
 bot = Bot(token=TOKEN)
 MONGO = os.environ['mongo']
+PORT = int(os.environ.get('PORT', '8443'))
 
 # initializing mongo client
 client = MongoClient(MONGO, tlsCAFile=certifi.where())
@@ -231,7 +232,7 @@ def main() -> None:
     if mode == 'webhook':
         # enable webhook
         updater.start_webhook(listen="0.0.0.0",
-                            port=int(os.environ['PORT']),
+                            port=PORT,
                             url_path=TOKEN,
                             webhook_url=os.environ['URL'] + TOKEN)
     else:
